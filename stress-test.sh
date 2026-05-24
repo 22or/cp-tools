@@ -68,6 +68,14 @@ exit_hint() {
   esac
 }
 
+# Print file contents; ensure the next script line is not glued to the last byte.
+cat_with_nl() {
+  local file=$1
+  [[ ! -s "$file" ]] && return 0
+  cat "$file"
+  [[ $(tail -c 1 "$file") != $'\n' ]] && printf '\n'
+}
+
 BIN_SOL="$WORKDIR/sol"
 BIN_BRUTE="$WORKDIR/brute"
 BIN_GEN="$WORKDIR/gen"
@@ -115,10 +123,10 @@ for ((i = 1; i <= N_ITER; i++)); do
     fi
     if [[ -s "$OUT_SOL" ]]; then
       echo "--- solution stdout (possibly partial) ---" >&2
-      cat "$OUT_SOL" >&2
+      cat_with_nl "$OUT_SOL" >&2
     fi
     echo "--- input ---" >&2
-    cat "$INP" >&2
+    cat_with_nl "$INP" >&2
     exit 1
   fi
 
@@ -133,10 +141,10 @@ for ((i = 1; i <= N_ITER; i++)); do
     fi
     if [[ -s "$OUT_BRUTE" ]]; then
       echo "--- brute stdout (possibly partial) ---" >&2
-      cat "$OUT_BRUTE" >&2
+      cat_with_nl "$OUT_BRUTE" >&2
     fi
     echo "--- input ---" >&2
-    cat "$INP" >&2
+    cat_with_nl "$INP" >&2
     exit 1
   fi
 
@@ -145,11 +153,11 @@ for ((i = 1; i <= N_ITER; i++)); do
     printf '\n'
     echo "Mismatch on iteration $i / $N_ITER"
     echo "========== INPUT (from generator) =========="
-    cat "$INP"
+    cat_with_nl "$INP"
     echo "========== SOLUTION OUTPUT ($SOL) =========="
-    cat "$OUT_SOL"
+    cat_with_nl "$OUT_SOL"
     echo "========== BRUTE OUTPUT ($BRUTE) =========="
-    cat "$OUT_BRUTE"
+    cat_with_nl "$OUT_BRUTE"
     echo "========== diff (solution vs brute) =========="
     diff -u "$OUT_SOL" "$OUT_BRUTE" || true
     exit 1
