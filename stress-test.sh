@@ -44,7 +44,7 @@ for f in "$SOL" "$BRUTE" "$GEN"; do
 done
 
 CXX=${CXX:-g++}
-CXXFLAGS=${CXXFLAGS:--std=c++17 -O2 -pipe}
+CXXFLAGS=${CXXFLAGS:--std=c++17 -O2 -pipe -DLOCAL}
 
 WORKDIR=$(mktemp -d "${TMPDIR:-/tmp}/cp_stress.XXXXXX") || {
   echo "error: could not create temp directory" >&2
