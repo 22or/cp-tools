@@ -49,7 +49,7 @@ struct {
 // other
 
 #define int long long
-constexpr int INF = LONG_LONG_MAX;
+constexpr int INF = LONG_LONG_MAX; // ~9e18
 mt19937_64 rng(SEED);
 int crand(int l,int r) { // [l,r]
 	return uniform_int_distribution<int>(l,r)(rng);
