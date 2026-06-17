@@ -2,7 +2,7 @@
 using namespace std;
 
 
-// anti-hash resistance
+// CUSTOM HASH
 
 #include <ext/pb_ds/assoc_container.hpp>
 using namespace __gnu_pbds;
@@ -14,13 +14,23 @@ struct chash {
         x = (x ^ (x >> 27)) * 0x94d049bb133111eb;
         return x ^ (x >> 31);
     }
+	static void hash_combine(size_t& h1,size_t h2) {
+		h1 = h1 ^ (h2 + 0x9e3779b97f4a7c15 + (h1 << 6) + (h1 >> 2));
+	}
+
+	
     size_t operator()(uint64_t x) const {
         return splitmix64(x + SEED);
     }
+	size_t operator()(const pair<uint64_t,uint64_t>& p) const {
+		size_t h = chash{}(p.first);
+		hash_combine(h,chash{}(p.second));
+		return h;
+	}
 };
 
 
-// debug
+// DEBUG
 
 #ifdef LOCAL
 struct {
@@ -46,17 +56,23 @@ struct {
 #endif
 
 
-// other
+// OTHER
 
+#define USE_LONGS // comment out to use ints
+#ifdef USE_LONGS
 #define int long long
 constexpr int INF = LONG_LONG_MAX; // ~9e18
+#else
+constexpr int INF = INT_MAX;
+#endif
+
 mt19937_64 rng(SEED);
-int crand(int l,int r) { // [l,r]
+int crand(int l,int r) { // random in [l,r]
 	return uniform_int_distribution<int>(l,r)(rng);
 }
 
 
-// solution
+// SOLUTION
 
 int32_t main() {
 	cin.tie(nullptr);
