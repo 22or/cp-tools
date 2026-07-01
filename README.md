@@ -9,6 +9,8 @@ Re-run `./install.sh` after pulling. It prompts for your C++ template path (`CPP
 
 ## Commands
 
+`cpcp` copies your `CPP_TEMPLATE` to a new file (e.g. `cpcp a.cpp` for problem A). Fails if the file already exists.
+
 ```bash
 cpcp problem.cpp
 compile [-S] [-D] file.cpp [g++ flags...]
