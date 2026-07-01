@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Stress-test a CP solution against a brute on random inputs from a generator.
 #
-# Usage: cp_stress.sh <solution.cpp> <brute.cpp> <gen.cpp> <N>
+# Usage: stress-test.sh <solution.cpp> <brute.cpp> <gen.cpp> <N>
 #
 # Requires: g++, awk (for decimal N; avoids bash octal like 010 -> 8)
 #
@@ -46,7 +46,7 @@ done
 CXX=${CXX:-g++}
 CXXFLAGS=${CXXFLAGS:--std=c++17 -O2 -pipe -DLOCAL}
 
-WORKDIR=$(mktemp -d "${TMPDIR:-/tmp}/cp_stress.XXXXXX") || {
+WORKDIR=$(mktemp -d "${TMPDIR:-/tmp}/stress_test.XXXXXX") || {
   echo "error: could not create temp directory" >&2
   exit 1
 }
@@ -83,7 +83,7 @@ INP="$WORKDIR/in.txt"
 OUT_SOL="$WORKDIR/out_sol.txt"
 OUT_BRUTE="$WORKDIR/out_brute.txt"
 
-compile() {
+compile_one() {
   local src=$1 out=$2 name=$3
   if ! $CXX $CXXFLAGS "$src" -o "$out" 2>"$WORKDIR/${name}_build.err"; then
     echo "error: failed to compile $name ($src):" >&2
@@ -92,9 +92,9 @@ compile() {
   fi
 }
 
-compile "$SOL" "$BIN_SOL" "solution"
-compile "$BRUTE" "$BIN_BRUTE" "brute"
-compile "$GEN" "$BIN_GEN" "generator"
+compile_one "$SOL" "$BIN_SOL" "solution"
+compile_one "$BRUTE" "$BIN_BRUTE" "brute"
+compile_one "$GEN" "$BIN_GEN" "generator"
 
 # Set after printing \r progress so we only prepend \n to stderr when a line needs finishing.
 PRINTED_PROGRESS=0

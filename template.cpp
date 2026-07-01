@@ -17,7 +17,6 @@ struct chash {
 	static void hash_combine(size_t& h1,size_t h2) {
 		h1 = h1 ^ (h2 + 0x9e3779b97f4a7c15 + (h1 << 6) + (h1 >> 2));
 	}
-
 	
     size_t operator()(uint64_t x) const {
         return splitmix64(x + SEED);
