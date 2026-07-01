@@ -1,43 +1,23 @@
-# cp-tools
-
-Competitive programming tools: shell helpers, an optional reference template, and stress testing.
-
 ## Install
-
-From this checkout (any path):
 
 ```bash
 ./install.sh
-```
-
-Installs `cp-tools.sh` to `~/.local/share/cp-tools/` and adds a source line to `~/.bashrc`. Prompts for your C++ template path and saves it in `~/.local/share/cp-tools/env.sh`. Re-run after pulling to refresh the installed helpers (you can keep or update `CPP_TEMPLATE`).
-
-```bash
 ./uninstall.sh
 ```
 
-## Shell commands
+Re-run `./install.sh` after pulling. It prompts for your C++ template path (`CPP_TEMPLATE` in `~/.local/share/cp-tools/env.sh`).
 
-`cpcp`, `compile`, and `run` — installed to `~/.local/share/cp-tools/cp-tools.sh`.
-
-Set your template path during `./install.sh`, or edit `~/.local/share/cp-tools/env.sh` later:
-
-```bash
-export CPP_TEMPLATE="$HOME/template.cpp"
-```
+## Commands
 
 ```bash
 cpcp problem.cpp
-
-compile file.cpp [extra g++ flags]
-run file.cpp [extra g++ flags]
-run -S file.cpp          # extra warnings
-run -D file.cpp          # libstdc++ debug mode
-CPP_STRICT=1 run file.cpp
-CPP_DEBUG=1 run file.cpp
+compile [-S] [-D] file.cpp [g++ flags...]
+run [-S] [-D] file.cpp [g++ flags...]
 ```
 
-## stress-test.sh
+`-S` — extra warnings. `-D` — libstdc++ debug mode. Or set `CPP_STRICT=1` / `CPP_DEBUG=1`.
+
+## Stress test
 
 ```bash
 ./stress-test.sh <solution.cpp> <brute.cpp> <generator.cpp> <N>
@@ -45,7 +25,8 @@ CPP_DEBUG=1 run file.cpp
 
 ## template.cpp
 
-Optional starter file included in this repo if you want a starting point — not installed by `install.sh`. Copy or point `CPP_TEMPLATE` at your own file.
-
-* uses compile flag `LOCAL` to enable/disable things based on whether you are running locally
-* debug requires C++17
+- `debug(...)` pretty-print for most data structures (enabled when `LOCAL` is defined — `compile`/`run` pass `-DLOCAL`)
+- Custom hash for `unordered_map` / `unordered_set` on `uint64_t` and pairs
+- `USE_LONGS` — `#define int long long` and `INF`; comment out for `int`
+- `crand(l, r)` — uniform random in `[l, r]` via `mt19937_64`
+- Fast I/O; commented `freopen` block for file I/O
