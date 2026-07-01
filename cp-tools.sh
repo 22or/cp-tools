@@ -7,10 +7,22 @@ cpcp() {
         echo "cpcp: CPP_TEMPLATE is not set" >&2
         return 1
     fi
-    if [[ $# -ne 1 || "$1" == -* ]]; then
-        echo "Usage: cpcp <dest>" >&2
+
+    local edit=0
+    case "${CPCP_EDIT:-}" in 1|yes|true|Y|y) edit=1 ;; esac
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            -e|--edit) edit=1; shift ;;
+            -*) echo "Usage: cpcp [-e|--edit] <dest>" >&2; return 1 ;;
+            *) break ;;
+        esac
+    done
+
+    if [[ -z "$1" ]]; then
+        echo "Usage: cpcp [-e|--edit] <dest>" >&2
         return 1
     fi
+
     local dest="$1"
     if [[ ! -f "$CPP_TEMPLATE" ]]; then
         echo "cpcp: CPP_TEMPLATE not found: $CPP_TEMPLATE" >&2
@@ -21,6 +33,7 @@ cpcp() {
         return 1
     fi
     cp "$CPP_TEMPLATE" "$dest"
+    (( edit )) && ${EDITOR:-vim} "$dest"
 }
 
 # Usage: [compile|run] [-S|--strict] [-D|--debug] <file.cpp> [extra g++ flags]

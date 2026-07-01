@@ -18,32 +18,24 @@ expand_path() {
     printf '%s\n' "$p"
 }
 
-read_cpp_template() {
+read_env() {
     # shellcheck source=/dev/null
     [[ -f "$ENV_FILE" ]] && source "$ENV_FILE"
-    printf '%s' "${CPP_TEMPLATE:-}"
 }
 
-write_env_template() {
-    local tpl="$1"
+write_env() {
+    local tpl="$1" edit="$2"
     {
-        echo '# cp-tools user config — required for cpcp'
+        echo '# cp-tools user config'
         printf 'export CPP_TEMPLATE=%q\n' "$tpl"
+        if (( edit )); then
+            echo 'export CPCP_EDIT=1'
+        fi
     } > "$ENV_FILE"
 }
 
-prompt_template() {
-    local default="$ROOT/template.cpp" current answer tpl
-
-    current="$(read_cpp_template)"
-    if [[ -n "$current" ]]; then
-        read -r -p "CPP_TEMPLATE is $current. Update? [y/N]: " answer
-        answer="${answer:-n}"
-        case "$answer" in
-            [Yy]*) ;;
-            *) echo "Keeping $ENV_FILE unchanged."; return 0 ;;
-        esac
-    fi
+prompt_template_path() {
+    local default="$ROOT/template.cpp" tpl
 
     if [[ -f "$default" ]]; then
         read -r -p "Path to your C++ template [$default]: " tpl
@@ -61,9 +53,46 @@ prompt_template() {
         echo "error: template not found: $tpl" >&2
         exit 1
     fi
+    printf '%s' "$tpl"
+}
 
-    write_env_template "$tpl"
-    echo "Wrote CPP_TEMPLATE=$tpl to $ENV_FILE"
+prompt_edit() {
+    local current="$1" answer hint=
+
+    [[ -n "$current" ]] && hint=" (currently $current)"
+    read -r -p "Open new files in \$EDITOR after cpcp?${hint} [y/N]: " answer
+    answer="${answer:-n}"
+    case "$answer" in
+        [Yy]*) return 0 ;;
+        *) return 1 ;;
+    esac
+}
+
+configure_env() {
+    local tpl edit=0 edit_current=off answer
+
+    read_env
+    tpl="${CPP_TEMPLATE:-}"
+    case "${CPCP_EDIT:-}" in 1|yes|true|Y|y) edit=1; edit_current=on ;; esac
+
+    if [[ -n "$tpl" ]]; then
+        read -r -p "CPP_TEMPLATE is $tpl. Update? [y/N]: " answer
+        answer="${answer:-n}"
+        case "$answer" in
+            [Yy]*) tpl="$(prompt_template_path)" ;;
+        esac
+    else
+        tpl="$(prompt_template_path)"
+    fi
+
+    if prompt_edit "$edit_current"; then
+        edit=1
+    else
+        edit=0
+    fi
+
+    write_env "$tpl" "$edit"
+    echo "Wrote $ENV_FILE"
 }
 
 main() {
@@ -72,7 +101,7 @@ main() {
     mkdir -p "$INSTALL_DIR"
     cp -f "$ROOT/cp-tools.sh" "$INSTALL_DIR/cp-tools.sh"
 
-    prompt_template
+    configure_env
 
     touch "$BASHRC"
     append_once "$SOURCE_LINE" "$BASHRC"

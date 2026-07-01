@@ -5,14 +5,15 @@
 ./uninstall.sh
 ```
 
-Re-run `./install.sh` after pulling. It prompts for your C++ template path (`CPP_TEMPLATE` in `~/.local/share/cp-tools/env.sh`).
+Re-run `./install.sh` after pulling. It prompts for your C++ template path and whether `cpcp` should open new files in `$EDITOR` (saved in `~/.local/share/cp-tools/env.sh` as `CPP_TEMPLATE` and `CPCP_EDIT`).
 
 ## Commands
 
-`cpcp` copies your `CPP_TEMPLATE` to a new file (e.g. `cpcp a.cpp` for problem A). Fails if the file already exists.
+`cpcp` copies your `CPP_TEMPLATE` to a new file (e.g. `cpcp a.cpp` for problem A). Fails if the file already exists. Opens in `$EDITOR` when `CPCP_EDIT=1` (set at install) or with `-e` / `--edit`.
 
 ```bash
 cpcp problem.cpp
+cpcp -e problem.cpp
 compile [-S] [-D] file.cpp [g++ flags...]
 run [-S] [-D] file.cpp [g++ flags...]
 ```
