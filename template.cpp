@@ -5,8 +5,17 @@ using namespace std;
 // CUSTOM HASH
 
 #include <ext/pb_ds/assoc_container.hpp>
+#include <ext/pb_ds/tree_policy.hpp>
 using namespace __gnu_pbds;
-const uint64_t SEED = chrono::high_resolution_clock::now().time_since_epoch().count();
+template<class T>
+using ordered_set = tree<
+    T,
+    null_type,
+    less<T>,
+    rb_tree_tag,
+    tree_order_statistics_node_update
+>;
+const uint64_t SEED = chrono::steady_clock::now().time_since_epoch().count();
 struct chash {
     static uint64_t splitmix64(uint64_t x) {
         x += 0x9e3779b97f4a7c15;
@@ -22,8 +31,8 @@ struct chash {
         return splitmix64(x + SEED);
     }
 	size_t operator()(const pair<uint64_t,uint64_t>& p) const {
-		size_t h = chash{}(p.first);
-		hash_combine(h,chash{}(p.second));
+		size_t h = (*this)(p.first);
+		hash_combine(h,(*this)(p.second));
 		return h;
 	}
 };
@@ -38,7 +47,7 @@ struct {
         if constexpr (is_arithmetic_v<T> or is_same_v<T,string>)   cerr << x;
         else {
             cerr << '{';
-            int f = 0; for(auto i : x) cerr << (f ++ ? "," : ""),__print(i);
+            int f = 0; for(const auto& i : x) cerr << (f ++ ? "," : ""),__print(i);
             cerr << '}';
         }
     }
