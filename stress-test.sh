@@ -3,11 +3,16 @@
 #
 # Usage: stress-test.sh <solution.cpp> <brute.cpp> <gen.cpp> <N>
 #
-# Requires: g++, awk (for decimal N; avoids bash octal like 010 -> 8)
+# Requires: g++
+#
+# All three programs are built with the same sanitizers as `compile`, so UB and
+# out-of-bounds access surface here instead of silently skewing a comparison.
+# Override CXX / CXXFLAGS to change that.
 #
 # Runtime: generator and both solutions must exit 0. Non-zero exit (e.g. assert,
-# uncaught exception, return 1) or fatal signal (e.g. SIGSEGV → exit 139) stops
-# the script and prints exit code, stderr, input, and any partial stdout.
+# sanitizer abort, uncaught exception, return 1) or fatal signal (e.g. SIGSEGV →
+# exit 139) stops the script and prints exit code, stderr, input, and any
+# partial stdout.
 
 set -u
 
@@ -28,13 +33,12 @@ if ! [[ "$N" =~ ^[0-9]+$ ]]; then
   echo "error: N must be a decimal integer (digits only), got: $N" >&2
   exit 1
 fi
-# Bash arithmetic treats a leading 0 as octal (e.g. 010 -> 8). Force base-10 count.
-N_DEC=$(awk -v s="$N" 'BEGIN { print s + 0 }')
-if [[ "$N_DEC" -lt 1 ]]; then
+# 10# so a leading zero is not read as octal (010 -> 8).
+N_ITER=$((10#$N))
+if (( N_ITER < 1 )); then
   echo "error: N must be at least 1, got: $N" >&2
   exit 1
 fi
-N_ITER="$N_DEC"
 
 for f in "$SOL" "$BRUTE" "$GEN"; do
   if [[ ! -f "$f" ]]; then
@@ -44,7 +48,9 @@ for f in "$SOL" "$BRUTE" "$GEN"; do
 done
 
 CXX=${CXX:-g++}
-CXXFLAGS=${CXXFLAGS:--std=c++17 -O2 -pipe -DLOCAL}
+DEFAULT_CXXFLAGS="-std=c++17 -O2 -pipe -g -DLOCAL -D_GLIBCXX_ASSERTIONS"
+DEFAULT_CXXFLAGS+=" -fsanitize=address,undefined -fno-omit-frame-pointer -fno-sanitize-recover=all"
+CXXFLAGS=${CXXFLAGS:-$DEFAULT_CXXFLAGS}
 
 WORKDIR=$(mktemp -d "${TMPDIR:-/tmp}/stress_test.XXXXXX") || {
   echo "error: could not create temp directory" >&2
@@ -54,18 +60,14 @@ trap 'rm -rf "$WORKDIR"' EXIT
 
 # Human-readable hint for crashes (bash exit = 128 + signal).
 exit_hint() {
-  local ec=$1
-  if [[ "$ec" -le 128 ]] || [[ "$ec" -gt 192 ]]; then
-    return 0
+  local ec=$1 sig name
+  (( ec > 128 && ec <= 192 )) || return 0
+  sig=$((ec - 128))
+  if name=$(kill -l "$sig" 2>/dev/null) && [[ -n "$name" ]]; then
+    printf ' [SIG%s]' "$name"
+  else
+    printf ' [signal %d]' "$sig"
   fi
-  local sig=$((ec - 128))
-  case "$sig" in
-    6) printf ' [SIGABRT]' ;;
-    8) printf ' [SIGFPE]' ;;
-    11) printf ' [SIGSEGV]' ;;
-    4) printf ' [SIGILL]' ;;
-    *) printf ' [signal %s]' "$sig" ;;
-  esac
 }
 
 # Print file contents; ensure the next script line is not glued to the last byte.
@@ -99,54 +101,37 @@ compile_one "$GEN" "$BIN_GEN" "generator"
 # Set after printing \r progress so we only prepend \n to stderr when a line needs finishing.
 PRINTED_PROGRESS=0
 
+# Run one program; on non-zero exit, report and stop the script.
+run_one() {
+  local bin=$1 name=$2 stdin=$3 out=$4 iter=$5
+  local err="$WORKDIR/$name.err" ec
+
+  "$bin" <"$stdin" >"$out" 2>"$err"
+  ec=$?
+  (( ec == 0 )) && return 0
+
+  (( PRINTED_PROGRESS )) && printf '\n' >&2
+  echo "error: $name failed on iteration $iter (exit ${ec}$(exit_hint "$ec"))" >&2
+  if [[ -s "$err" ]]; then
+    echo "--- $name stderr ---" >&2
+    cat "$err" >&2
+  fi
+  if [[ -s "$out" ]]; then
+    echo "--- $name stdout (possibly partial) ---" >&2
+    cat_with_nl "$out" >&2
+  fi
+  # For the generator, $out is the input — printing it again adds nothing.
+  if [[ "$name" != generator ]]; then
+    echo "--- input ---" >&2
+    cat_with_nl "$INP" >&2
+  fi
+  exit 1
+}
+
 for ((i = 1; i <= N_ITER; i++)); do
-  "$BIN_GEN" >"$INP" 2>"$WORKDIR/gen.err"
-  gen_ec=$?
-  if [[ "$gen_ec" -ne 0 ]]; then
-    [[ "$PRINTED_PROGRESS" -eq 1 ]] && printf '\n' >&2
-    echo "error: generator failed on iteration $i (exit ${gen_ec}$(exit_hint "$gen_ec"))" >&2
-    if [[ -s "$WORKDIR/gen.err" ]]; then
-      echo "--- generator stderr ---" >&2
-      cat "$WORKDIR/gen.err" >&2
-    fi
-    exit 1
-  fi
-
-  "$BIN_SOL" <"$INP" >"$OUT_SOL" 2>"$WORKDIR/sol.err"
-  sol_ec=$?
-  if [[ "$sol_ec" -ne 0 ]]; then
-    [[ "$PRINTED_PROGRESS" -eq 1 ]] && printf '\n' >&2
-    echo "error: solution failed on iteration $i (exit ${sol_ec}$(exit_hint "$sol_ec"))" >&2
-    if [[ -s "$WORKDIR/sol.err" ]]; then
-      echo "--- solution stderr ---" >&2
-      cat "$WORKDIR/sol.err" >&2
-    fi
-    if [[ -s "$OUT_SOL" ]]; then
-      echo "--- solution stdout (possibly partial) ---" >&2
-      cat_with_nl "$OUT_SOL" >&2
-    fi
-    echo "--- input ---" >&2
-    cat_with_nl "$INP" >&2
-    exit 1
-  fi
-
-  "$BIN_BRUTE" <"$INP" >"$OUT_BRUTE" 2>"$WORKDIR/brute.err"
-  brute_ec=$?
-  if [[ "$brute_ec" -ne 0 ]]; then
-    [[ "$PRINTED_PROGRESS" -eq 1 ]] && printf '\n' >&2
-    echo "error: brute failed on iteration $i (exit ${brute_ec}$(exit_hint "$brute_ec"))" >&2
-    if [[ -s "$WORKDIR/brute.err" ]]; then
-      echo "--- brute stderr ---" >&2
-      cat "$WORKDIR/brute.err" >&2
-    fi
-    if [[ -s "$OUT_BRUTE" ]]; then
-      echo "--- brute stdout (possibly partial) ---" >&2
-      cat_with_nl "$OUT_BRUTE" >&2
-    fi
-    echo "--- input ---" >&2
-    cat_with_nl "$INP" >&2
-    exit 1
-  fi
+  run_one "$BIN_GEN" generator /dev/null "$INP" "$i"
+  run_one "$BIN_SOL" solution "$INP" "$OUT_SOL" "$i"
+  run_one "$BIN_BRUTE" brute "$INP" "$OUT_BRUTE" "$i"
 
   if ! cmp -s "$OUT_SOL" "$OUT_BRUTE"; then
     # Progress uses \r on stderr; stdout shares the TTY cursor — newline first.

@@ -26,6 +26,8 @@ run [-S] [-D] [-F] file.cpp [g++ flags...]
 stress-test <solution.cpp> <brute.cpp> <generator.cpp> <N>
 ```
 
+All three programs are built with the same sanitizers as `compile`. Set `CXXFLAGS` to override.
+
 ## template.cpp
 
 - `debug(...)` pretty-print for most data structures (enabled when `LOCAL` is defined — `compile`/`run` pass `-DLOCAL`)

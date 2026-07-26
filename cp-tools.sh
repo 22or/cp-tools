@@ -33,7 +33,10 @@ cpcp() {
         return 1
     fi
     cp "$CPP_TEMPLATE" "$dest"
-    (( edit )) && ${EDITOR:-vim} "$dest"
+    # Not `(( edit )) && ...`: as the last command that returns 1 when edit is 0.
+    if (( edit )); then
+        ${EDITOR:-vim} "$dest"
+    fi
 }
 
 # Usage: [compile|run] [-S|--strict] [-D|--debug] [-F|--fast] <file.cpp> [extra g++ flags]
@@ -95,11 +98,15 @@ run() {
     done
     local base="${a[i]%.*}"
 
-    trap 'rm -f "$base"' RETURN INT TERM
     compile "$@" || return 1
     [[ "$base" != */* ]] && base="./$base"
-    "$base"
+
+    # Subshell so the cleanup trap dies with it. A trap set here would outlive the
+    # function and fire on every later Ctrl-C in the interactive shell.
+    ( trap 'rm -f "$base"' EXIT INT TERM; "$base" )
+    local ec=$?
     echo
+    return $ec
 }
 
 # stress-test.sh is installed next to this file; expose it like the other commands
