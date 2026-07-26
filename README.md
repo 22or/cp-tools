@@ -14,16 +14,16 @@ Re-run `./install.sh` after pulling. It prompts for your C++ template path and w
 ```bash
 cpcp problem.cpp
 cpcp -e problem.cpp
-compile [-S] [-D] file.cpp [g++ flags...]
-run [-S] [-D] file.cpp [g++ flags...]
+compile [-S] [-D] [-F] file.cpp [g++ flags...]
+run [-S] [-D] [-F] file.cpp [g++ flags...]
 ```
 
-`-S` — extra warnings. `-D` — libstdc++ debug mode. Or set `CPP_STRICT=1` / `CPP_DEBUG=1`.
+`-S` — extra warnings. `-D` — libstdc++ debug mode. `-F` — drop ASan/UBSan and the libstdc++ assertions, which otherwise cost about 1.7x runtime; use it when a timing needs to resemble the judge's. Or set `CPP_STRICT=1` / `CPP_DEBUG=1` / `CPP_FAST=1`.
 
 ## Stress test
 
 ```bash
-./stress-test.sh <solution.cpp> <brute.cpp> <generator.cpp> <N>
+stress-test <solution.cpp> <brute.cpp> <generator.cpp> <N>
 ```
 
 ## template.cpp

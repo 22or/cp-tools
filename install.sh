@@ -3,8 +3,11 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# shellcheck source=lib/common.sh
-source "$ROOT/lib/common.sh"
+
+append_once() {
+    local line="$1" file="$2"
+    grep -qxF "$line" "$file" 2>/dev/null || printf '\n%s\n' "$line" >> "$file"
+}
 
 INSTALL_DIR="$HOME/.local/share/cp-tools"
 ENV_FILE="$INSTALL_DIR/env.sh"
@@ -97,9 +100,12 @@ configure_env() {
 
 main() {
     [[ -f "$ROOT/cp-tools.sh" ]] || { echo "error: missing $ROOT/cp-tools.sh" >&2; exit 1; }
+    [[ -f "$ROOT/stress-test.sh" ]] || { echo "error: missing $ROOT/stress-test.sh" >&2; exit 1; }
 
     mkdir -p "$INSTALL_DIR"
     cp -f "$ROOT/cp-tools.sh" "$INSTALL_DIR/cp-tools.sh"
+    cp -f "$ROOT/stress-test.sh" "$INSTALL_DIR/stress-test.sh"
+    chmod +x "$INSTALL_DIR/stress-test.sh"
 
     configure_env
 

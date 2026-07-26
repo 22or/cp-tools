@@ -2,10 +2,6 @@
 # uninstall.sh — remove ~/.local/share/cp-tools and its bashrc source line
 set -euo pipefail
 
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# shellcheck source=lib/common.sh
-source "$ROOT/lib/common.sh"
-
 INSTALL_DIR="$HOME/.local/share/cp-tools"
 BASHRC="$HOME/.bashrc"
 SOURCE_LINE='[[ -f "$HOME/.local/share/cp-tools/cp-tools.sh" ]] && source "$HOME/.local/share/cp-tools/cp-tools.sh"'

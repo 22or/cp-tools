@@ -36,27 +36,29 @@ cpcp() {
     (( edit )) && ${EDITOR:-vim} "$dest"
 }
 
-# Usage: [compile|run] [-S|--strict] [-D|--debug] <file.cpp> [extra g++ flags]
+# Usage: [compile|run] [-S|--strict] [-D|--debug] [-F|--fast] <file.cpp> [extra g++ flags]
 compile() {
-    local strict=0 debug=0
+    local strict=0 debug=0 fast=0
     case "${CPP_STRICT:-}" in 1|yes|true|Y|y) strict=1 ;; esac
     case "${CPP_DEBUG:-}" in 1|yes|true|Y|y) debug=1 ;; esac
+    case "${CPP_FAST:-}" in 1|yes|true|Y|y) fast=1 ;; esac
     while [[ $# -gt 0 ]]; do
         case "$1" in
             -S|--strict) strict=1; shift ;;
             -D|--debug)  debug=1; shift ;;
+            -F|--fast)   fast=1; shift ;;
             *) break ;;
         esac
     done
     if [[ -z "$1" ]]; then
-        echo "Usage: compile [-S|--strict] [-D|--debug] <file.cpp> [extra g++ flags]"
+        echo "Usage: compile [-S|--strict] [-D|--debug] [-F|--fast] <file.cpp> [extra g++ flags]"
         return 1
     fi
 
     local src="$1" base="${1%.*}"
     shift
 
-    local -a strict_flags=() debug_flags=()
+    local -a strict_flags=() debug_flags=() check_flags=()
     (( strict )) && strict_flags=(
         -Wshadow -Wconversion -Wsign-conversion
         -Wduplicated-cond -Wduplicated-branches -Wlogical-op
@@ -64,25 +66,32 @@ compile() {
         -Wfloat-equal -Wcast-qual -Wcast-align -Wshift-overflow=2
     )
     (( debug )) && debug_flags=(-D_GLIBCXX_DEBUG -D_GLIBCXX_DEBUG_PEDANTIC)
+    # The checks cost roughly 1.7x runtime, so -F drops them when a timing needs
+    # to resemble the judge's.
+    (( fast )) || check_flags=(
+        -D_GLIBCXX_ASSERTIONS
+        -fsanitize=address,undefined -fno-omit-frame-pointer -fno-sanitize-recover=all
+    )
 
-    g++ -DLOCAL -D_GLIBCXX_ASSERTIONS -std=c++17 -O2 -g \
-        -D_FORTIFY_SOURCE=2 -fstack-protector-strong \
+    g++ -DLOCAL -std=c++17 -O2 -g \
         -Wall -Wextra -Wformat=2 -Wno-unused-variable -Wno-unused-parameter \
-        -fsanitize=address,undefined -fno-omit-frame-pointer -fno-sanitize-recover=all \
-        "${debug_flags[@]}" "${strict_flags[@]}" "$src" -o "$base" "$@" \
+        "${check_flags[@]}" "${debug_flags[@]}" "${strict_flags[@]}" "$src" -o "$base" "$@" \
         || { echo "Compilation failed."; return 1; }
 }
 
 run() {
     if [[ -z "$1" ]]; then
-        echo "Usage: run [-S|--strict] [-D|--debug] <file.cpp> [extra g++ flags]"
+        echo "Usage: run [-S|--strict] [-D|--debug] [-F|--fast] <file.cpp> [extra g++ flags]"
         return 1
     fi
 
-    local -a a=("$@") i=0
-    while (( i < ${#a[@]} )) && [[ ${a[i]} == -S || ${a[i]} == --strict \
-        || ${a[i]} == -D || ${a[i]} == --debug ]]; do
-        ((i++))
+    local -a a=("$@")
+    local i=0
+    while (( i < ${#a[@]} )); do
+        case "${a[i]}" in
+            -S|--strict|-D|--debug|-F|--fast) (( ++i )) ;;
+            *) break ;;
+        esac
     done
     local base="${a[i]%.*}"
 
@@ -91,4 +100,15 @@ run() {
     [[ "$base" != */* ]] && base="./$base"
     "$base"
     echo
+}
+
+# stress-test.sh is installed next to this file; expose it like the other commands
+# so it does not depend on ~/.local/bin being on PATH.
+stress-test() {
+    local script="${BASH_SOURCE[0]%/*}/stress-test.sh"
+    if [[ ! -x "$script" ]]; then
+        echo "stress-test: not found at $script — re-run cp-tools/install.sh" >&2
+        return 1
+    fi
+    "$script" "$@"
 }
