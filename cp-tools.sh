@@ -18,7 +18,7 @@ cpcp() {
         esac
     done
 
-    if [[ -z "$1" ]]; then
+    if [[ -z "${1:-}" ]]; then
         echo "Usage: cpcp [-e|--edit] <dest>" >&2
         return 1
     fi
@@ -39,9 +39,32 @@ cpcp() {
     fi
 }
 
-# Usage: [compile|run] [-S|--strict] [-D|--debug] [-F|--fast] <file.cpp> [extra g++ flags]
+# Resolve the source argument, printing it on stdout.
+#
+# `compile foo` / `run foo` is what tab completion gives once `foo` (the binary)
+# sits next to `foo.cpp`: completion stops at the prefix they share. Take it to
+# mean the source. Without this, the binary becomes both input and output and
+# g++ bails with "input file is the same as output file".
+_cp_src() {
+    local src="$1"
+    case "$src" in
+        *.cpp|*.cc|*.cxx|*.c++|*.C|*.c) ;;
+        *) [[ -f "$src.cpp" ]] && src="$src.cpp" ;;
+    esac
+    if [[ ! -f "$src" ]]; then
+        echo "${FUNCNAME[1]:-cp-tools}: no such source file: $1" >&2
+        return 1
+    fi
+    case "$src" in
+        *.cpp|*.cc|*.cxx|*.c++|*.C|*.c) ;;
+        *) echo "${FUNCNAME[1]:-cp-tools}: not a C++ source file: $src" >&2; return 1 ;;
+    esac
+    printf '%s\n' "$src"
+}
+
+# Usage: [compile|run] [-S|--strict] [-D|--debug] [-F|--fast] [-o <bin>] <file.cpp> [extra g++ flags]
 compile() {
-    local strict=0 debug=0 fast=0
+    local strict=0 debug=0 fast=0 out=
     case "${CPP_STRICT:-}" in 1|yes|true|Y|y) strict=1 ;; esac
     case "${CPP_DEBUG:-}" in 1|yes|true|Y|y) debug=1 ;; esac
     case "${CPP_FAST:-}" in 1|yes|true|Y|y) fast=1 ;; esac
@@ -50,16 +73,28 @@ compile() {
             -S|--strict) strict=1; shift ;;
             -D|--debug)  debug=1; shift ;;
             -F|--fast)   fast=1; shift ;;
+            -o|--output)
+                if [[ -z "${2:-}" ]]; then
+                    echo "compile: $1 needs an output path" >&2
+                    return 1
+                fi
+                out="$2"; shift 2 ;;
             *) break ;;
         esac
     done
-    if [[ -z "$1" ]]; then
-        echo "Usage: compile [-S|--strict] [-D|--debug] [-F|--fast] <file.cpp> [extra g++ flags]"
+    if [[ -z "${1:-}" ]]; then
+        echo "Usage: compile [-S|--strict] [-D|--debug] [-F|--fast] [-o <bin>] <file.cpp> [extra g++ flags]"
         return 1
     fi
 
-    local src="$1" base="${1%.*}"
+    local src
+    src="$(_cp_src "$1")" || return 1
     shift
+    [[ -n "$out" ]] || out="${src%.*}"
+    if [[ -e "$out" && ! -f "$out" ]]; then
+        echo "compile: output path is not a regular file: $out" >&2
+        return 1
+    fi
 
     local -a strict_flags=() debug_flags=() check_flags=()
     (( strict )) && strict_flags=(
@@ -78,13 +113,14 @@ compile() {
 
     g++ -DLOCAL -std=c++17 -O2 -g \
         -Wall -Wextra -Wformat=2 -Wno-unused-variable -Wno-unused-parameter \
-        "${check_flags[@]}" "${debug_flags[@]}" "${strict_flags[@]}" "$src" -o "$base" "$@" \
+        "${check_flags[@]}" "${debug_flags[@]}" "${strict_flags[@]}" "$src" -o "$out" "$@" \
         || { echo "Compilation failed."; return 1; }
 }
 
 run() {
-    if [[ -z "$1" ]]; then
-        echo "Usage: run [-S|--strict] [-D|--debug] [-F|--fast] <file.cpp> [extra g++ flags]"
+    local usage="Usage: run [-S|--strict] [-D|--debug] [-F|--fast] <file.cpp> [extra g++ flags]"
+    if [[ -z "${1:-}" ]]; then
+        echo "$usage"
         return 1
     fi
 
@@ -96,14 +132,43 @@ run() {
             *) break ;;
         esac
     done
-    local base="${a[i]%.*}"
+    if [[ -z "${a[i]:-}" ]]; then
+        echo "$usage"
+        return 1
+    fi
+    local src
+    src="$(_cp_src "${a[i]}")" || return 1
+    a[i]="$src"
 
-    compile "$@" || return 1
-    [[ "$base" != */* ]] && base="./$base"
+    # run owns -o (below), and a second one silently wins in g++: the binary
+    # would land elsewhere and run would exec the empty placeholder.
+    local j
+    for (( j = i + 1; j < ${#a[@]}; j++ )); do
+        case "${a[j]}" in
+            -o|--output|-o?*)
+                echo "run: -o is not supported — run deletes its binary; use compile -o" >&2
+                return 1 ;;
+        esac
+    done
+
+    # run deletes its binary when the program exits, so it must not write to the
+    # name compile would pick: `foo` beside `foo.cpp` may be a directory or a
+    # binary compile was meant to keep. Build to a scratch name next to the
+    # source instead; mktemp both reserves the name and proves the directory is
+    # writable.
+    local dir="."
+    [[ "$src" == */* ]] && dir="${src%/*}"
+    local stem="${src##*/}"; stem="${stem%.*}"
+    local bin
+    bin=$(mktemp "$dir/.${stem}.run.XXXXXX" 2>/dev/null) \
+        || bin=$(mktemp "${TMPDIR:-/tmp}/cp-run.XXXXXX") \
+        || { echo "run: could not create a scratch binary path" >&2; return 1; }
+
+    compile "${a[@]:0:i}" -o "$bin" "${a[@]:i}" || { rm -f "$bin"; return 1; }
 
     # Subshell so the cleanup trap dies with it. A trap set here would outlive the
     # function and fire on every later Ctrl-C in the interactive shell.
-    ( trap 'rm -f "$base"' EXIT INT TERM; "$base" )
+    ( trap 'rm -f "$bin"' EXIT INT TERM; "$bin" )
     local ec=$?
     echo
     return $ec
